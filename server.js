@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { PrismaClient } = require('@prisma/client');
 
 const app = express();
@@ -137,7 +138,7 @@ app.post('/api/borrowings', async (req, res) => {
   }
 });
 
-// --- RETOURS ---
+// --- RETOURS & INSPECTION ---
 app.post('/api/borrowings/:id/return', async (req, res) => {
   const { id } = req.params;
   const { returnedQuantity, condition, notes } = req.body;
@@ -201,20 +202,7 @@ app.post('/api/borrowings/:id/return', async (req, res) => {
   }
 });
 
-// --- AUDIT LOGS ---
-app.get('/api/audit-logs', async (req, res) => {
-  try {
-    const logs = await prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' } });
-    res.json(logs);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-// ==========================================
-// --- ROUTES CHAMPS PERSONNALISÉS (DYNAMISME) ---
-// ==========================================
-
-// 1. Récupérer tous les champs personnalisés actifs
+// --- CHAMPS PERSONNALISÉS (DYNAMISME) ---
 app.get('/api/custom-fields', async (req, res) => {
   try {
     const customFields = await prisma.customField.findMany({
@@ -227,17 +215,16 @@ app.get('/api/custom-fields', async (req, res) => {
   }
 });
 
-// 2. Créer un nouveau champ personnalisé
 app.post('/api/custom-fields', async (req, res) => {
   const { entity, name, label, type, required, options, categoryIds } = req.body;
 
   try {
     const field = await prisma.customField.create({
       data: {
-        entity,       // 'equipment' | 'borrow' | 'return'
-        name,         // identifiant unique (ex: 'serial_charger')
-        label,        // libellé affiché à l'écran
-        type,         // 'text' | 'number' | 'date' | 'dropdown' | 'boolean'
+        entity,
+        name,
+        label,
+        type,
         required: Boolean(required),
         options: typeof options === 'object' ? JSON.stringify(options) : options,
         categoryIds: typeof categoryIds === 'object' ? JSON.stringify(categoryIds) : categoryIds,
@@ -245,7 +232,6 @@ app.post('/api/custom-fields', async (req, res) => {
       }
     });
 
-    // Enregistrement dans le journal d'audit
     await prisma.auditLog.create({
       data: {
         action: "Création",
@@ -260,36 +246,43 @@ app.post('/api/custom-fields', async (req, res) => {
   }
 });
 
-// 3. Supprimer (ou désactiver) un champ personnalisé
 app.delete('/api/custom-fields/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
-    const deletedField = await prisma.customField.delete({
-      where: { id }
-    });
+    const deletedField = await prisma.customField.delete({ where: { id } });
 
-    // Trace d'audit
     await prisma.auditLog.create({
       data: {
         action: "Suppression",
         entity: "Champ Personnalisé",
-        details: `Suppression du champ "${deletedField.label}" (${deletedField.name})`
+        details: `Suppression du champ "${deletedField.label}"`
       }
     });
 
-    res.json({ message: "Champ personnalisé supprimé avec succès", id });
+    res.json({ message: "Champ supprimé avec succès", id });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
-const PORT = process.env.PORT || 5000;
-const path = require('path');
 
-// Servir l'application React compilée
+// --- AUDIT LOGS ---
+app.get('/api/audit-logs', async (req, res) => {
+  try {
+    const logs = await prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' } });
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- INTÉGRATION FRONTEND REACT (BUILD STATIC) ---
 app.use(express.static(path.join(__dirname, 'dist')));
 
-app.get('*', (req, res) => {
+// Syntaxe compatible Node.js v24 / Express v5 pour la capture de toutes les routes
+app.get('(.*)', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
+
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Serveur démarré avec succès sur le port ${PORT}`));
