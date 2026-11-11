@@ -279,8 +279,8 @@ app.get('/api/audit-logs', async (req, res) => {
 // --- INTÉGRATION FRONTEND REACT (BUILD STATIC) ---
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// Syntaxe compatible Node.js v24 / Express v5 pour la capture de toutes les routes
-app.get('(.*)', (req, res) => {
+// Capture toutes les routes avec une Regex JS native pour compatibilité Express v5 / Node v24
+app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
